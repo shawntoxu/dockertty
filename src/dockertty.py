@@ -45,7 +45,7 @@ class TerminalHandler(tornado.web.RequestHandler):
     Handler for GET method of WebConsole page
     """
 
-    def get(self, container_id):
+    def get(self, container_id,namespace):
         self.render(os.path.join(static_path(), "terminal.html"))
 
 
@@ -66,8 +66,10 @@ class TerminalSocketHandler(tornado.websocket.WebSocketHandler):
             # `docker exec -ti <container_id> /bin/sh -c '[ -x /bin/bash ] && /bin/bash || /bin/sh'`
             # and then set the stream to non-blocking mode.
             pty = PtyProcessUnicode.spawn(
-                ['docker', 'exec', '-ti', self.container_id, '/bin/sh', '-c',
-                 'echo $$ > /tmp/sh.pid.{} && [ -x /bin/bash ] && /bin/bash || /bin/sh'.format(self.uuid)])
+                #['docker', 'exec', '-ti', self.container_id, '/bin/sh', '-c',
+                # 'echo $$ > /tmp/sh.pid.{} && [ -x /bin/bash ] && /bin/bash || /bin/sh'.format(self.uuid)])
+                ['kubectl','exec','-it',self.container_id,'/bin/bash','--namespace={}'.format(self.namespace)])
+                
             flags = fcntl(pty.fileobj, F_GETFL)
             fcntl(pty.fileobj, F_SETFL, flags | O_NONBLOCK)
 
@@ -158,8 +160,9 @@ class TerminalSocketHandler(tornado.websocket.WebSocketHandler):
         """
         logger.warning("Invalid message type received: {}".format(message))
 
-    def open(self, container_id):
+    def open(self, container_id,namespace):
         setattr(self, "container_id", container_id)
+        setattr(self, "namespace", namespace)
         setattr(self, "uuid", binascii.hexlify(os.urandom(20)).decode())
 
         if not self.container_id:
@@ -210,8 +213,8 @@ if __name__ == '__main__':
 
     app = tornado.web.Application(
         handlers=[
-            (r'^/terminal/(.*)/ws', TerminalSocketHandler),
-            (r'^/terminal/(.*)', TerminalHandler),
+            (r'^/terminal/(.*)/(.*)/ws', TerminalSocketHandler),
+            (r'^/terminal/(.*)/(.*)', TerminalHandler),
         ],
         static_path=static_path()
     )
